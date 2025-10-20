@@ -106,17 +106,9 @@ let isShuttingDown = false;
 async function connectDatabase(retries = 5, delay = 5000) {
   for (let i = 1; i <= retries; i++) {
     try {
-      await new Promise((resolve, reject) => {
-        db.getConnection((err, connection) => {
-          if (err) {
-            reject(err);
-          } else {
-            console.log(`✅ Database connection established (attempt ${i}/${retries})`);
-            connection.release();
-            resolve();
-          }
-        });
-      });
+      const connection = await db.getConnection();
+      console.log(`✅ Database connection established (attempt ${i}/${retries})`);
+      connection.release();
       return true;
     } catch (err) {
       console.error(`❌ Database connection attempt ${i}/${retries} failed:`, err.message);
