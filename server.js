@@ -157,7 +157,7 @@ async function startServer() {
 }
 
 // Graceful shutdown handler
-function gracefulShutdown(signal) {
+async function gracefulShutdown(signal) {
   if (isShuttingDown) {
     return;
   }
@@ -166,18 +166,18 @@ function gracefulShutdown(signal) {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
 
   if (server) {
-    server.close(() => {
+    server.close(async () => {
       console.log('✅ HTTP server closed');
       
-      db.end((err) => {
-        if (err) {
-          console.error('❌ Error closing database connections:', err);
-          process.exit(1);
-        }
+      try {
+        await db.end();
         console.log('✅ Database connections closed');
         console.log('👋 Server shut down successfully');
         process.exit(0);
-      });
+      } catch (err) {
+        console.error('❌ Error closing database connections:', err);
+        process.exit(1);
+      }
     });
 
     // Force shutdown after 30 seconds
