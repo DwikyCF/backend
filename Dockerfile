@@ -1,16 +1,17 @@
 # Dockerfile untuk Railway Deployment
 # Multi-stage build untuk optimasi ukuran image
 
-# Stage 1: Base image
-FROM node:18-alpine AS base
+# Stage 1: Base image - GANTI ke node:20-slim untuk menghindari Docker Hub issues
+FROM node:20-slim AS base
 
 # Install dependencies yang diperlukan
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     curl \
     git \
     python3 \
     make \
-    g++
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -35,14 +36,15 @@ RUN npm ci
 COPY . .
 
 # Stage 4: Production
-FROM node:18-alpine AS production
+FROM node:20-slim AS production
 
 # Install curl untuk health checks
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user untuk security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -m -u 1001 -g nodejs nodejs
 
 # Set working directory
 WORKDIR /app
