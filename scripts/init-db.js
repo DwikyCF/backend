@@ -11,47 +11,87 @@ require('dotenv').config();
 
 // Parse DATABASE_URL dari Railway atau gunakan individual env vars
 function getDatabaseConfig() {
-  if (process.env.DATABASE_URL) {
-    // Parse Railway's DATABASE_URL format
-    // Format: mysql://user:password@host:port/database
-    const url = new URL(process.env.DATABASE_URL);
-    return {
-      host: url.hostname,
-      port: url.port || 3306,
-      user: url.username,
-      password: url.password,
-      database: url.pathname.slice(1), // Remove leading slash
-      multipleStatements: true, // Important untuk menjalankan multiple SQL statements
-    };
+  // Log environment variables untuk debugging (tanpa password)
+  console.log('🔍 Checking environment variables...');
+  console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+  console.log('MYSQL_URL exists:', !!process.env.MYSQL_URL);
+  console.log('MYSQLHOST exists:', !!process.env.MYSQLHOST);
+  console.log('MYSQL_DATABASE exists:', !!process.env.MYSQL_DATABASE);
+
+  // Railway bisa menggunakan MYSQL_URL atau DATABASE_URL
+  const dbUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
+
+  if (dbUrl) {
+    try {
+      // Parse Railway's DATABASE_URL format
+      // Format: mysql://user:password@host:port/database
+      const url = new URL(dbUrl);
+      
+      const config = {
+        host: url.hostname,
+        port: parseInt(url.port) || 3306,
+        user: url.username,
+        password: url.password,
+        database: url.pathname.slice(1), // Remove leading slash
+        multipleStatements: true,
+        connectTimeout: 60000, // 60 seconds timeout
+      };
+
+      console.log('✅ Using DATABASE_URL configuration');
+      console.log(`   Host: ${config.host}`);
+      console.log(`   Port: ${config.port}`);
+      console.log(`   User: ${config.user}`);
+      console.log(`   Database: ${config.database}`);
+
+      return config;
+    } catch (err) {
+      console.error('❌ Error parsing DATABASE_URL:', err.message);
+      console.log('⚠️  Falling back to individual environment variables');
+    }
   }
 
-  // Fallback ke individual environment variables
-  return {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'salon_management',
+  // Fallback ke individual environment variables (Railway format)
+  const config = {
+    host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.MYSQLPORT || process.env.DB_PORT || '3306'),
+    user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+    password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE || process.env.DB_NAME || 'railway',
     multipleStatements: true,
+    connectTimeout: 60000,
   };
+
+  console.log('✅ Using individual environment variables');
+  console.log(`   Host: ${config.host}`);
+  console.log(`   Port: ${config.port}`);
+  console.log(`   User: ${config.user}`);
+  console.log(`   Database: ${config.database}`);
+
+  return config;
 }
 
 async function initializeDatabase() {
   let connection;
+  let tempConnection;
 
   try {
     console.log('🔄 Starting database initialization...');
     
     const config = getDatabaseConfig();
-    console.log(`📡 Connecting to database: ${config.host}:${config.port}/${config.database}`);
+    console.log(`📡 Attempting to connect to: ${config.host}:${config.port}/${config.database}`);
 
-    // Buat koneksi tanpa database terlebih dahulu
-    const tempConnection = await mysql.createConnection({
+    // Test connection tanpa database terlebih dahulu
+    console.log('🔌 Testing database connection...');
+    
+    tempConnection = await mysql.createConnection({
       host: config.host,
       port: config.port,
       user: config.user,
       password: config.password,
+      connectTimeout: 60000,
     });
+
+    console.log('✅ Successfully connected to MySQL server');
 
     // Cek apakah database sudah ada
     const [databases] = await tempConnection.query(
@@ -61,11 +101,13 @@ async function initializeDatabase() {
     if (databases.length === 0) {
       console.log(`📦 Creating database: ${config.database}`);
       await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\``);
+      console.log(`✅ Database ${config.database} created`);
     } else {
       console.log(`✅ Database ${config.database} already exists`);
     }
 
     await tempConnection.end();
+    console.log('🔌 Reconnecting to specific database...');
 
     // Koneksi ke database yang sudah dibuat
     connection = await mysql.createConnection(config);
@@ -86,6 +128,7 @@ async function initializeDatabase() {
       });
       
       await connection.end();
+      console.log('✅ Database initialization completed (already initialized)');
       return;
     }
 
@@ -93,7 +136,14 @@ async function initializeDatabase() {
     const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
     console.log(`📄 Reading schema file: ${schemaPath}`);
     
-    const schema = await fs.readFile(schemaPath, 'utf8');
+    let schema;
+    try {
+      schema = await fs.readFile(schemaPath, 'utf8');
+      console.log(`✅ Schema file loaded (${schema.length} characters)`);
+    } catch (err) {
+      console.error('❌ Error reading schema file:', err.message);
+      throw new Error(`Schema file not found at ${schemaPath}`);
+    }
     
     // Split SQL berdasarkan delimiter untuk stored procedures
     console.log('🔄 Executing schema...');
@@ -106,6 +156,8 @@ async function initializeDatabase() {
       .split(';')
       .filter(stmt => stmt.trim() !== '');
 
+    console.log(`📝 Found ${statements.length} SQL statements to execute`);
+
     let executedCount = 0;
     for (const statement of statements) {
       const trimmedStmt = statement.trim();
@@ -113,6 +165,9 @@ async function initializeDatabase() {
         try {
           await connection.query(trimmedStmt);
           executedCount++;
+          if (executedCount % 5 === 0) {
+            console.log(`   Executed ${executedCount}/${statements.length} statements...`);
+          }
         } catch (err) {
           // Ignore errors untuk statements yang sudah ada atau tidak critical
           if (!err.message.includes('already exists')) {
@@ -138,11 +193,40 @@ async function initializeDatabase() {
     console.log('✅ Database initialization completed successfully!');
     
   } catch (error) {
-    console.error('❌ Database initialization failed:', error.message);
-    console.error('Error details:', error);
+    console.error('❌ Database initialization failed');
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error errno:', error.errno);
+    
+    if (error.code === 'ECONNREFUSED') {
+      console.error('\n🔴 Connection Refused Error:');
+      console.error('   - MySQL service might not be running');
+      console.error('   - Check if MYSQLHOST and MYSQLPORT are correct');
+      console.error('   - Verify MySQL service is deployed in Railway');
+      console.error('   - Make sure both services are in the same project');
+    }
+    
+    if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('\n🔴 Access Denied Error:');
+      console.error('   - Check MYSQLUSER and MYSQLPASSWORD are correct');
+    }
+
+    console.error('\nFull error details:', error);
+    
+    if (tempConnection) {
+      try {
+        await tempConnection.end();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
     
     if (connection) {
-      await connection.end();
+      try {
+        await connection.end();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
     
     process.exit(1);
