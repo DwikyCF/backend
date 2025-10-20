@@ -1,7 +1,7 @@
 # Dockerfile untuk Railway Deployment
 # Multi-stage build untuk optimasi ukuran image
 
-# Stage 1: Base image - GANTI ke node:20-slim untuk menghindari Docker Hub issues
+# Stage 1: Base image
 FROM node:20-slim AS base
 
 # Install dependencies yang diperlukan
@@ -16,26 +16,22 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
 # Stage 2: Dependencies
 FROM base AS dependencies
 
-# Install production dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Copy package files
+COPY package*.json ./
 
-# Stage 3: Build
-FROM base AS build
-
-# Install all dependencies (including dev)
-RUN npm ci
-
-# Copy source code
+# Copy semua source code SEBELUM npm install
+# Ini penting agar postinstall script bisa menemukan scripts/init-db.js
 COPY . .
 
-# Stage 4: Production
+# Install production dependencies
+# postinstall akan jalan di sini dan sudah bisa akses scripts/init-db.js
+RUN npm ci --omit=dev && \
+    npm cache clean --force
+
+# Stage 3: Production
 FROM node:20-slim AS production
 
 # Install curl untuk health checks
@@ -49,7 +45,7 @@ RUN groupadd -g 1001 nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy production dependencies from dependencies stage
+# Copy node_modules dari stage dependencies
 COPY --from=dependencies --chown=nodejs:nodejs /app/node_modules ./node_modules
 
 # Copy application code
@@ -69,6 +65,6 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/health || exit 1
 
-# Start application dengan database initialization
-# Run init-db.js dulu, baru start server
-CMD ["sh", "-c", "node scripts/init-db.js && npm start"]
+# Start application
+# Jalankan db:init dulu, lalu start server
+CMD ["npm", "run", "railway:start"]
