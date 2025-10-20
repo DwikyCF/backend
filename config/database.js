@@ -1,10 +1,10 @@
 /**
  * Database Configuration
- * Koneksi ke MySQL database menggunakan mysql2
+ * Koneksi ke MySQL database menggunakan mysql2/promise
  * Support untuk Railway MYSQL_URL dan individual env vars
  */
 
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 /**
@@ -124,3 +124,4 @@ pool.on('error', (err) => {
 });
 
 module.exports = pool;
+
