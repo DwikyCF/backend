@@ -96,32 +96,5 @@ console.log(`  Database: ${config.database}`);
 // Buat connection pool
 const pool = mysql.createPool(config);
 
-// Test connection
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error('Database connection error:', err.message);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-      console.error('Database connection was closed.');
-    }
-    if (err.code === 'ER_CON_COUNT_ERROR') {
-      console.error('Database has too many connections.');
-    }
-    if (err.code === 'ECONNREFUSED') {
-      console.error('Database connection was refused.');
-    }
-  } else {
-    console.log('✅ Database connected successfully');
-    connection.release();
-  }
-});
-
-// Handle pool errors
-pool.on('error', (err) => {
-  console.error('Unexpected database error:', err);
-  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-    console.error('Database connection was lost. Reconnecting...');
-  }
-});
-
+// Export promise pool
 module.exports = pool;
-
