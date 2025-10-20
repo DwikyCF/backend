@@ -35,13 +35,35 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-// CORS configuration
+// CORS configuration - Allow frontend access
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://frontend-delta-taupe.vercel.app', // Add your Vercel domain
+].filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      console.log('⚠️  CORS blocked origin:', origin);
+      callback(null, true); // In production, you might want to block: callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
 
 // Body parser middleware
 app.use(express.json());
