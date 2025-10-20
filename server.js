@@ -76,6 +76,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// API root info (helpful when visiting /api directly)
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Salon Management API root',
+    availableRoutes: ['/api/auth', '/api/services', '/api/bookings', '/api/dashboard', '/api/profile'],
+    version: '1.0.0',
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/services', serviceRoutes);
