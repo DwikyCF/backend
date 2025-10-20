@@ -69,6 +69,6 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/health || exit 1
 
-# Start application
-# Railway akan menjalankan database initialization otomatis via postinstall script
-CMD ["npm", "start"]
+# Start application dengan database initialization
+# Run init-db.js dulu, baru start server
+CMD ["sh", "-c", "node scripts/init-db.js && npm start"]
