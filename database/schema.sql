@@ -25,7 +25,7 @@ DELIMITER $$
 --
 -- Procedures
 --
-CREATE DEFINER=`root`@`localhost` PROCEDURE `update_loyalty_points` (IN `p_customer_id` INT, IN `p_transaction_id` INT, IN `p_amount` DECIMAL(10,2))   BEGIN
+CREATE PROCEDURE `update_loyalty_points` (IN `p_customer_id` INT, IN `p_transaction_id` INT, IN `p_amount` DECIMAL(10,2))   BEGIN
     DECLARE points_earned INT;
     SET points_earned = FLOOR(p_amount / 10000);
     
@@ -37,7 +37,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `update_loyalty_points` (IN `p_custo
     VALUES (p_customer_id, p_transaction_id, points_earned, 'earn', 'Earned from transaction');
 END$$
 
-CREATE DEFINER=`root`@`localhost` PROCEDURE `update_stylist_rating` (IN `p_stylist_id` INT)   BEGIN
+CREATE PROCEDURE `update_stylist_rating` (IN `p_stylist_id` INT)   BEGIN
     DECLARE avg_rating DECIMAL(3,2);
     DECLARE review_count INT;
     
