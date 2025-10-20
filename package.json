@@ -1,42 +1,33 @@
 {
-  "name": "salon-management-backend",
+  "name": "salon-backend",
   "version": "1.0.0",
-  "description": "Backend API for Salon Management System",
+  "description": "Backend API untuk Salon Management System",
   "main": "server.js",
   "scripts": {
-    "start": "node scripts/init-db.js && node server.js",
+    "start": "node server.js",
     "dev": "nodemon server.js",
     "db:init": "node scripts/init-db.js",
-    "db:setup": "npm run db:init",
+    "db:upload": "node scripts/upload-sql.js",
+    "db:connect": "node scripts/mysql-connect.js",
+    "db:query": "node scripts/run-query.js",
     "db:check": "node scripts/health-check.js",
     "health": "node scripts/health-check.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "node scripts/init-db.js || true"
   },
-  "keywords": [
-    "salon",
-    "booking",
-    "management",
-    "api"
-  ],
+  "keywords": ["salon", "management", "api"],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "date-fns": "^2.30.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1",
-    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.6.5",
     "nodemailer": "^6.9.7"
   },
   "devDependencies": {
-    "axios": "^1.12.2",
     "nodemon": "^3.0.2"
   }
 }
