@@ -11,6 +11,9 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
+// Import database
+const db = require('./config/database');
+
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
@@ -86,7 +89,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Welcome to Salon Management API',
     version: '1.0.0',
-    documentation: '/api/docs', // Bisa ditambahkan swagger docs
+    documentation: '/api/docs',
   });
 });
 
@@ -96,22 +99,106 @@ app.use(errorHandler);
 
 // Server configuration
 const PORT = process.env.PORT || 5000;
+let server;
+let isShuttingDown = false;
 
-// Start server
-app.listen(PORT, () => {
-  console.log('='.repeat(50));
-  console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode`);
-  console.log(`📡 Listening on port ${PORT}`);
-  console.log(`🌐 API URL: http://localhost:${PORT}`);
-  console.log(`📝 Health check: http://localhost:${PORT}/health`);
-  console.log('='.repeat(50));
-});
+// Database connection with retry
+async function connectDatabase(retries = 5, delay = 5000) {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await new Promise((resolve, reject) => {
+        db.getConnection((err, connection) => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log(`✅ Database connection established (attempt ${i}/${retries})`);
+            connection.release();
+            resolve();
+          }
+        });
+      });
+      return true;
+    } catch (err) {
+      console.error(`❌ Database connection attempt ${i}/${retries} failed:`, err.message);
+      if (i < retries) {
+        console.log(`⏳ Retrying in ${delay/1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  console.error('❌ All database connection attempts failed');
+  return false;
+}
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled Promise Rejection:', err);
-  // Close server & exit process
-  process.exit(1);
-});
+// Start server function
+async function startServer() {
+  try {
+    // Wait for database connection
+    const dbConnected = await connectDatabase();
+    
+    if (!dbConnected) {
+      console.error('⚠️  Starting server without database connection');
+    }
+
+    // Start HTTP server
+    server = app.listen(PORT, '0.0.0.0', () => {
+      console.log('='.repeat(50));
+      console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode`);
+      console.log(`📡 Listening on port ${PORT}`);
+      console.log(`🌐 API URL: http://localhost:${PORT}`);
+      console.log(`📝 Health check: http://localhost:${PORT}/health`);
+      console.log('='.repeat(50));
+    });
+
+    // Graceful shutdown handlers
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+    process.on('unhandledRejection', (err) => {
+      console.error('❌ Unhandled Promise Rejection:', err);
+      gracefulShutdown('UNHANDLED_REJECTION');
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown handler
+function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+
+  if (server) {
+    server.close(() => {
+      console.log('✅ HTTP server closed');
+      
+      db.end((err) => {
+        if (err) {
+          console.error('❌ Error closing database connections:', err);
+          process.exit(1);
+        }
+        console.log('✅ Database connections closed');
+        console.log('👋 Server shut down successfully');
+        process.exit(0);
+      });
+    });
+
+    // Force shutdown after 30 seconds
+    setTimeout(() => {
+      console.error('⚠️  Forced shutdown after timeout');
+      process.exit(1);
+    }, 30000);
+  } else {
+    process.exit(0);
+  }
+}
+
+// Start the server
+startServer();
 
 module.exports = app;
