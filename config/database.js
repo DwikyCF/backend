@@ -82,7 +82,127 @@ async function testConnection(retries = 5, delay = 5000) {
         }
       }
     }
+  const mysql = require('mysql2');
+
+// Parse DATABASE_URL atau gunakan individual env vars
+function getDatabaseConfig() {
+  // Railway MySQL Plugin provides these variables:
+  // - MYSQL_URL (full connection string)
+  // - MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE
+  
+  // Priority 1: MYSQL_URL (Railway's standard)
+  if (process.env.MYSQL_URL) {
+    try {
+      const url = new URL(process.env.MYSQL_URL);
+      return {
+        host: url.hostname,
+        port: parseInt(url.port) || 3306,
+        user: url.username,
+        password: url.password,
+        database: url.pathname.slice(1),
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+      };
+    } catch (err) {
+      console.error('Failed to parse MYSQL_URL:', err.message);
+    }
   }
+
+  // Priority 2: DATABASE_URL (generic fallback)
+  if (process.env.DATABASE_URL) {
+    try {
+      const url = new URL(process.env.DATABASE_URL);
+      return {
+        host: url.hostname,
+        port: parseInt(url.port) || 3306,
+        user: url.username,
+        password: url.password,
+        database: url.pathname.slice(1),
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+      };
+    } catch (err) {
+      console.error('Failed to parse DATABASE_URL:', err.message);
+    }
+  }
+
+  // Priority 3: Railway's individual MySQL variables
+  if (process.env.MYSQLHOST) {
+    return {
+      host: process.env.MYSQLHOST,
+      port: parseInt(process.env.MYSQLPORT) || 3306,
+      user: process.env.MYSQLUSER,
+      password: process.env.MYSQLPASSWORD,
+      database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
+    };
+  }
+
+  // Priority 4: Standard env vars (for local development)
+  return {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'salon_management',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+  };
+}
+
+const config = getDatabaseConfig();
+
+// Log configuration (hide password)
+console.log('Database Configuration:');
+console.log(`  Host: ${config.host}`);
+console.log(`  Port: ${config.port}`);
+console.log(`  User: ${config.user}`);
+console.log(`  Database: ${config.database}`);
+
+// Buat connection pool
+const pool = mysql.createPool(config);
+
+// Test connection
+pool.getConnection((err, connection) => {
+  if (err) {
+    console.error('Database connection error:', err.message);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+      console.error('Database connection was closed.');
+    }
+    if (err.code === 'ER_CON_COUNT_ERROR') {
+      console.error('Database has too many connections.');
+    }
+    if (err.code === 'ECONNREFUSED') {
+      console.error('Database connection was refused.');
+    }
+  } else {
+    console.log('✅ Database connected successfully');
+    connection.release();
+  }
+});
+
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.error('Database connection was lost. Reconnecting...');
+  }
+});
+
+module.exports = pool;
   return false;
 }
 
@@ -98,3 +218,4 @@ pool.on('error', (err) => {
 });
 
 module.exports = pool;
+
